@@ -1,0 +1,7 @@
+cd xauusd-daily-technical
+git init
+git add .
+git commit -m "Daily XAUUSD Telegram report"
+git branch -M main
+git remote add origin https://github.com/ATOM44B/xauusd-daily-technical.git
+git push -u origin main
