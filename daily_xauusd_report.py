@@ -72,7 +72,8 @@ and approximate Risk/Reward. If it is a pre-event or range-bound day, say so and
 a primary plan PLUS a brief alternative / invalidation trigger.
 RISKS & NOTES - event risk, what would invalidate the setup.
 
-Rules: use real numbers from your searches; if sources conflict, say so and anchor to \
+Rules: output only the report itself - no preamble and no commentary about your search \
+process. Use real numbers from your searches; if sources conflict, say so and anchor to \
 the live intraday range. End with the exact line: "Educational only - not financial advice." \
 Keep the whole report under ~5000 characters."""
 
@@ -81,23 +82,34 @@ def generate_analysis(today_str):
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, timeout=600.0)
     messages = [{"role": "user", "content": build_prompt(today_str)}]
 
+    # Newest web search tool; fall back to the prior version if this account/SDK
+    # doesn't support it yet.
+    tool_type = "web_search_20260209"
     resp = None
-    # The server-side web_search loop can return stop_reason="pause_turn"
-    # if it hits its internal iteration cap; re-send to let it resume.
-    for _ in range(6):
-        resp = client.messages.create(
-            model=MODEL,
-            max_tokens=8000,
-            thinking={"type": "adaptive"},
-            output_config={"effort": "high"},
-            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 8}],
-            messages=messages,
-        )
+    for _ in range(8):
+        try:
+            resp = client.messages.create(
+                model=MODEL,
+                max_tokens=8000,
+                tools=[{"type": tool_type, "name": "web_search", "max_uses": 8}],
+                messages=messages,
+            )
+        except anthropic.BadRequestError as e:
+            if tool_type != "web_search_20250305" and "web_search" in str(e):
+                print(f"NOTE: {tool_type} rejected, retrying with web_search_20250305",
+                      file=sys.stderr)
+                tool_type = "web_search_20250305"
+                continue
+            raise
+        # The server-side web_search loop can return stop_reason="pause_turn"
+        # if it hits its internal iteration cap; re-send to let it resume.
         if resp.stop_reason == "pause_turn":
             messages.append({"role": "assistant", "content": resp.content})
             continue
         break
 
+    if resp is None:
+        raise RuntimeError("No response from the API")
     text = "".join(b.text for b in resp.content if b.type == "text").strip()
     if not text:
         raise RuntimeError(f"Empty analysis (stop_reason={resp.stop_reason})")
