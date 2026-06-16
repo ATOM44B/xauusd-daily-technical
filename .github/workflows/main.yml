@@ -1,0 +1,34 @@
+name: Daily XAUUSD Telegram Report
+
+on:
+  schedule:
+    # 00:00 UTC == 07:00 Asia/Bangkok (Thailand, UTC+7), every day.
+    # NOTE: GitHub's scheduler runs in UTC and can be delayed several minutes
+    # (occasionally 15+) under load, so delivery lands at ~07:00 ICT, not to the second.
+    - cron: "0 0 * * *"
+  workflow_dispatch: {}   # lets you trigger a manual test run from the Actions tab
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate and send report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Optional: uncomment to use the cheaper model
+          # CLAUDE_MODEL: claude-sonnet-4-6
+        run: python scripts/daily_xauusd_report.py
